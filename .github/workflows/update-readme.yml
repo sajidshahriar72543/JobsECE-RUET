@@ -1,0 +1,67 @@
+name: Update README with Circular Data
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get Issue data
+        id: get_issue_data
+        run: |
+          # Get the issue body content
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          echo "Issue Body: $ISSUE_BODY"
+
+          # Extract Circular Name, Recruiting Authority, and Circular Link
+          CIRCULAR_NAME=$(echo "$ISSUE_BODY" | grep -oP '(?<=\*\*Circular Name\:\*\*\s)(.*)')
+          RECRUITING_AUTHORITY=$(echo "$ISSUE_BODY" | grep -oP '(?<=\*\*Recruiting Authority\:\*\*\s)(.*)')
+          CIRCULAR_LINK=$(echo "$ISSUE_BODY" | grep -oP '(?<=\*\*Circular Link\:\*\*\s)(.*)')
+
+          # Debugging: Print extracted values
+          echo "Circular Name: $CIRCULAR_NAME"
+          echo "Recruiting Authority: $RECRUITING_AUTHORITY"
+          echo "Circular Link: $CIRCULAR_LINK"
+
+          # Check if any of the required fields are missing
+          if [ -z "$CIRCULAR_NAME" ] || [ -z "$RECRUITING_AUTHORITY" ] || [ -z "$CIRCULAR_LINK" ]; then
+            echo "Error: Missing one or more required fields in the issue body."
+            exit 1
+          fi
+
+          # Store extracted data in environment variables for later use
+          echo "CIRCULAR_NAME=${CIRCULAR_NAME}" >> $GITHUB_ENV
+          echo "RECRUITING_AUTHORITY=${RECRUITING_AUTHORITY}" >> $GITHUB_ENV
+          echo "CIRCULAR_LINK=${CIRCULAR_LINK}" >> $GITHUB_ENV
+
+      - name: Update README.md
+        run: |
+          # Get the current timestamp to separate entries
+          TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+          # Check if README.md already has the table header
+          if ! grep -q "## Circular Table" README.md; then
+            echo -e "\n## Circular Table\n\n| Circular Name | Recruiting Authority | Circular Link | Timestamp |\n|---------------|----------------------|---------------|-----------|" >> README.md
+          fi
+
+          # Format the extracted data to remove unnecessary spaces or newlines
+          CIRCULAR_NAME=$(echo "$CIRCULAR_NAME" | sed 's/\r//g' | sed 's/\n/ /g')
+          RECRUITING_AUTHORITY=$(echo "$RECRUITING_AUTHORITY" | sed 's/\r//g' | sed 's/\n/ /g')
+          CIRCULAR_LINK=$(echo "$CIRCULAR_LINK" | sed 's/\r//g' | sed 's/\n/ /g')
+
+          # Append the circular information as a new row in the table without adding extra quotes
+          echo -e "| $CIRCULAR_NAME | $RECRUITING_AUTHORITY | $CIRCULAR_LINK | $TIMESTAMP |" >> README.md
+
+      - name: Commit changes
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add README.md
+          git commit -m "Update README with new circular"
+          git push
